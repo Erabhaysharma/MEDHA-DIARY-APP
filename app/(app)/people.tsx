@@ -29,18 +29,27 @@ export default function PeopleScreen() {
     useCallback(() => { loadPeople(); }, [])
   );
 
-  const loadPeople = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchPeople();
-      setPeople(data);
-    } catch (e: any) {
-      setError('Could not load people. Make sure the backend is running.');
-    }
-    setLoading(false);
-  };
+const loadPeople = async () => {
+  setLoading(true);
+  setError(null);
+  try {
+    // Fetch existing people first
+    const data = await fetchPeople();
 
+    if (data.length === 0) {
+      // No people yet — bulk extract from all diary entries
+      await api.post('/api/extract-people/all').catch(() => {});
+      // Fetch again after extraction
+      const refreshed = await fetchPeople();
+      setPeople(refreshed);
+    } else {
+      setPeople(data);
+    }
+  } catch (e: any) {
+    setError('Could not load people. Make sure the backend is running.');
+  }
+  setLoading(false);
+};
   const renderPerson = ({ item, index }: { item: Person; index: number }) => {
     const positiveWidth = `${Math.max(5, (item.sentiment_avg + 1) / 2 * 100)}%`;
     const icon          = RELATIONSHIP_ICONS[item.relationship] ?? 'person-outline';

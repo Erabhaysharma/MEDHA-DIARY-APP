@@ -60,19 +60,19 @@ function RootLayoutInner() {
       <StatusBar style="auto" />
       <AuthGate />
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index"           options={{ animation: 'none' }} />
-        <Stack.Screen name="(auth)"          options={{ animation: 'fade' }} />
-        <Stack.Screen name="(app)"           options={{ animation: 'fade' }} />
-        <Stack.Screen name="account"         options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="lock"            options={{ animation: 'fade' }} />
-        <Stack.Screen name="set-pin"         options={{ animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="new-entry"       options={{ animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="entry/[id]"      options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="edit-entry/[id]" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="add-memory"      options={{ animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="memory-detail"   options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="person/[id]"     options={{ animation: 'slide_from_right' }} />
-      </Stack>
+  <Stack.Screen name="index"           options={{ animation: 'none' }} />
+  <Stack.Screen name="(auth)"          options={{ animation: 'fade' }} />
+  <Stack.Screen name="(app)"           options={{ animation: 'fade' }} />
+  {/* ✅ Remove account from here — it lives inside (app) tabs now */}
+  <Stack.Screen name="lock"            options={{ animation: 'fade' }} />
+  <Stack.Screen name="set-pin"         options={{ animation: 'slide_from_bottom' }} />
+  <Stack.Screen name="new-entry"       options={{ animation: 'slide_from_bottom' }} />
+  <Stack.Screen name="entry/[id]"      options={{ animation: 'slide_from_right' }} />
+  <Stack.Screen name="edit-entry/[id]" options={{ animation: 'slide_from_right' }} />
+  <Stack.Screen name="add-memory"      options={{ animation: 'slide_from_bottom' }} />
+  <Stack.Screen name="memory-detail"   options={{ animation: 'slide_from_right' }} />
+  <Stack.Screen name="person/[id]"     options={{ animation: 'slide_from_right' }} />
+</Stack>
     </>
   );
 }

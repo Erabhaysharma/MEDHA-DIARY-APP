@@ -40,3 +40,6 @@ export async function fetchPersonAnalysis(personId: string): Promise<PersonAnaly
   const response = await api.get(`/api/people/${personId}`);
   return response.data;
 }
+export async function extractAllPeople(): Promise<void> {
+  await api.post('/api/extract-people/all');
+}

@@ -1,10 +1,11 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../../src/constants/theme';
 import { useTheme } from '../../src/contexts/ThemeContext';
+import { Platform } from 'react-native';
 
 export default function AppLayout() {
   const { colors: C } = useTheme();
+
   return (
     <Tabs
       screenOptions={{
@@ -13,9 +14,11 @@ export default function AppLayout() {
           backgroundColor: C.surface,
           borderTopColor:  C.border,
           borderTopWidth:  1,
-          height:          65,
-          paddingBottom:   10,
+          height:          Platform.OS === 'android' ? 65 : 85,
+          paddingBottom:   Platform.OS === 'android' ? 10 : 28,
           paddingTop:      8,
+          // ✅ Fix for Android navigation bar overlap
+          elevation: 8,
         },
         tabBarActiveTintColor:   C.primary,
         tabBarInactiveTintColor: C.textMuted,
@@ -31,6 +34,7 @@ export default function AppLayout() {
           ),
         }}
       />
+
       <Tabs.Screen
         name="diary"
         options={{
@@ -40,6 +44,7 @@ export default function AppLayout() {
           ),
         }}
       />
+
       <Tabs.Screen
         name="chat"
         options={{
@@ -49,6 +54,7 @@ export default function AppLayout() {
           ),
         }}
       />
+
       <Tabs.Screen
         name="people"
         options={{
@@ -57,30 +63,26 @@ export default function AppLayout() {
             <Ionicons name="people" size={size} color={color} />
           ),
         }}
-
-
-        
       />
 
       <Tabs.Screen
-  name="schedule"
-  options={{
-    title: 'Schedule',
-    tabBarIcon: ({ color, size }) => (
-      <Ionicons name="calendar-outline" size={size} color={color} />
-    ),
-  }}
-/>
+        name="schedule"
+        options={{
+          title: 'Schedule',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="calendar-outline" size={size} color={color} />
+          ),
+        }}
+      />
 
-   
+      {/* ✅ Hide account from tab bar */}
+      <Tabs.Screen
+        name="account"
+        options={{
+          href: null,  // ← this hides it from tab bar completely
+        }}
+      />
 
-      {/* ── Hidden routes — no tab bar item ── */}
-      
-        
-      
-      
-      
-      
     </Tabs>
   );
 }

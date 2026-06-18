@@ -10,7 +10,7 @@ import { router } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { supabase } from '../../src/lib/supabase';
-import { FONT_SIZE, SPACING, BORDER_RADIUS, FONT_WEIGHT } from '../src/constants/theme';
+import { FONT_SIZE, SPACING, BORDER_RADIUS, FONT_WEIGHT } from '../../src/constants/theme';
 import { useLock } from '../../src/contexts/LockContext';
 
 export default function AccountScreen() {

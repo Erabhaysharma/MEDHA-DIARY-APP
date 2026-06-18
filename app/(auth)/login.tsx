@@ -107,7 +107,7 @@ export default function LoginScreen() {
             {/* Switch to signup */}
             <View style={s.switchRow}>
               <Text style={s.switchText}>Don't have an account? </Text>
-              <Link href="/(auth)/Signup" asChild>
+              <Link href="/(auth)/signup" asChild>
                 <TouchableOpacity>
                   <Text style={s.switchLink}>Create one</Text>
                 </TouchableOpacity>

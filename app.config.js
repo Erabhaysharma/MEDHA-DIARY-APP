@@ -30,6 +30,7 @@ export default {
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',
         backgroundColor: '#f3f3f3',
+        softwareKeyboardLayoutMode: 'pan',
       },
       permissions: ['RECEIVE_BOOT_COMPLETED'],
     },
