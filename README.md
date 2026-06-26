@@ -1,56 +1,135 @@
-# Welcome to your Expo app 👋
+# 🧠 Medha – AI Personal Diary & Wellness Companion
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Medha is an AI-powered personal diary that combines journaling, emotional insights, astrology, and intelligent conversations into one private companion.
 
-## Get started
+Unlike traditional diary apps, Medha understands your thoughts, remembers your journey, and provides personalized guidance while keeping your data secure.
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
+## ✨ Features
 
-2. Start the app
+### 📖 Smart Diary
 
-   ```bash
-   npx expo start
-   ```
+* Rich text diary entries
+* Mood tracking
+* Reprsent privious life with graph ,growth, mood, productivity
+* Secure cloud storage
+* Search previous entries
 
-In the output, you'll find options to open the app in a
+### 🤖 AI Companion
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+* Personalized AI conversations
+* Context-aware responses
+* Memory of previous conversations
+* Emotional support
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### 🔮 Astro Medha
 
-## Get a fresh project
+* Daily horoscope
+* Personalized Vedic astrology insights
+* Zodiac-based recommendations
+* Multi-language forecasts (English & Hindi)
 
-When you're ready, run:
+### 🔮 Social dairy
+ * Share Dairy anonmasly
+ * medha help to give context for content craetion using real world dairy
 
-```bash
-npm run reset-project
-```
+### 📊 Emotional Insights
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+* Mood trends
+* Emotional patterns
+* AI-generated reflections
+* Personal growth tracking
 
-### Other setup steps
+### 🔐 Privacy
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+* PIN lock
+* Secure authentication
+* Password reset
+* Private user data
 
-## Learn more
+---
 
-To learn more about developing your project with Expo, look at the following resources:
+## 🚀 Tech Stack
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### Frontend
 
-## Join the community
+* React Native
+* Expo
+* TypeScript
+* Expo Router
 
-Join our community of developers creating universal apps.
+### Backend
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+* FastAPI
+* Python
+
+### Database
+
+* Supabase
+* PostgreSQL
+
+### AI
+
+* Groq API
+* Llama 3.3 70B
+
+---
+
+## 📱 Screens
+
+* Authentication
+* Home Dashboard
+* Diary
+* AI Chat
+* Astro Medha
+* Activity
+* Account
+
+---
+## Environment Variables
+
+Create a `.env` file.
+
+Required variables include:
+
+* SUPABASE_URL
+* SUPABASE_ANON_KEY
+* SUPABASE_SERVICE_ROLE_KEY
+* GROQ_API_KEY
+
+---
+
+## Roadmap
+
+* AI Memory System
+* Voice Journal
+* AI Life Coach
+* Habit Tracking
+* Full Kundli Analysis
+* Numerology
+* Palm Reading AI
+* Meditation Assistant
+* PDF Journal Export
+
+---
+
+## Project Status
+
+🚧 Currently under active development.
+
+---
+
+## Contributing
+
+Contributions, feature requests, and bug reports are welcome.
+
+---
+
+## License
+
+MIT License
+
+---
+
+Made with ❤️ by Abhay kumar sharma 
