@@ -9,6 +9,7 @@ export default {
 
     plugins: [
       'expo-router',
+      "@react-native-community/datetimepicker",
       'expo-secure-store',
       [
         'expo-notifications',

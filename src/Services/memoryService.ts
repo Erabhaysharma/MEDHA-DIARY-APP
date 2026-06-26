@@ -29,7 +29,24 @@ export async function fetchMemoryCards(): Promise<{
   unlocked: boolean;
 }> {
   const response = await api.get('/api/memory-cards');
-  return response.data;
+  const data = response.data;
+
+  // Filter out any cards missing required fields
+  const validCards = (data.cards ?? []).filter(
+    (c: any) =>
+      c.id &&
+      c.title &&
+      c.title.trim() !== '' &&
+      c.summary &&
+      c.summary.trim() !== '' &&
+      c.color &&
+      c.emoji
+  );
+
+  return {
+    cards:    validCards,
+    unlocked: data.unlocked ?? false,
+  };
 }
 
 export async function fetchUserMemories(userId: string): Promise<UserMemory[]> {
@@ -41,4 +58,29 @@ export async function fetchUserMemories(userId: string): Promise<UserMemory[]> {
     .limit(20);
 
   return (data ?? []).map(m => ({ ...m, type: 'user' as const }));
+}
+
+export type TrendPoint = {
+  date:  string;
+  value: number;
+};
+
+export type Trend = {
+  key:      string;
+  label:    string;
+  emoji:    string;
+  color:    string;
+  gradient: string;
+  points:   TrendPoint[];
+  avg:      number;
+  trend:    'up' | 'down' | 'flat';
+  latest:   number;
+};
+
+export async function fetchTrends(): Promise<{
+  trends:   Trend[];
+  has_data: boolean;
+}> {
+  const response = await api.get('/api/trends');
+  return response.data;
 }

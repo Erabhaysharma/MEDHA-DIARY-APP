@@ -253,6 +253,8 @@ memories: {
   };
 };
 
+
+
 // Add alias:
 
     };
@@ -321,3 +323,33 @@ export const PRIORITY_OPTIONS: { value: Priority; label: string; color: string }
 
 //____________________impliment memories feature________________
 export type Memory = Database['public']['Tables']['memories']['Row'];
+
+
+// ─── Social Diary (v1.0.1) ───────────────────────────────────────────────────
+
+export type SocialPost = {
+  id:           string;
+  user_id:      string;
+  entry_id:     string;
+  caption:      string;
+  is_anonymous: boolean;
+  views:        number;
+  created_at:   string;
+  // joined fields from API
+  entry_content:   string;
+  entry_date:      string;
+  mood_label:      MoodLabel | null;
+  display_name:    string | null;   // null if anonymous
+  likes_count:     number;
+  comments_count:  number;
+  liked_by_me:     boolean;
+};
+
+export type PostComment = {
+  id:           string;
+  post_id:      string;
+  user_id:      string;
+  content:      string;
+  created_at:   string;
+  display_name: string | null;
+};
