@@ -15,7 +15,7 @@ import { openPremiumCheckout } from '../../src/Services/paymentService';
 import { verifyPremium } from '../../src/Services/astroService';  // ← add this
 
 
-const PREMIUM_PRICE  = '₹149/month';
+const PREMIUM_PRICE  = '₹99/month';
 //const PAYMENT_LINK   = 'https://rzp.io/l/YOUR_RAZORPAY_LINK'; // replace with your Razorpay link
 
 const FEATURES = [

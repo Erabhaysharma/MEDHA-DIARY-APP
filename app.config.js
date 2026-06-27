@@ -1,7 +1,7 @@
 export default {
   expo: {
     name: 'Medha',
-    slug: 'medha-diary', 
+    slug: 'medha-diary',
     version: '1.0.0',
     scheme: 'medhadiary',
     orientation: 'portrait',
@@ -9,14 +9,13 @@ export default {
 
     plugins: [
       'expo-router',
-      "@react-native-community/datetimepicker",
+      '@react-native-community/datetimepicker',
       'expo-secure-store',
       [
         'expo-notifications',
         {
           color: '#C8A96E',
           sounds: [],
-          
         },
       ],
     ],
@@ -27,22 +26,22 @@ export default {
     },
 
     android: {
-      package: 'com.abhay.medhadiary',           
+      package: 'com.abhay.medhadiary',
+      softwareKeyboardLayoutMode: 'resize',
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',
         backgroundColor: '#f3f3f3',
-        softwareKeyboardLayoutMode: 'pan',
       },
       permissions: ['RECEIVE_BOOT_COMPLETED'],
     },
 
     extra: {
-  supabaseUrl: process.env.SUPABASE_URL,
-  supabaseAnon: process.env.SUPABASE_ANON_KEY,
-  apiUrl: 'https://medha-diary.onrender.com',
-  eas: {
-  projectId: '8da8293f-edd3-46e4-b42c-d0016b7c147c'  // ✅ add this
-  },
-},
+      supabaseUrl:  process.env.SUPABASE_URL,
+      supabaseAnon: process.env.SUPABASE_ANON_KEY,
+      apiUrl:       'https://medha-diary.onrender.com',
+      eas: {
+        projectId: '8da8293f-edd3-46e4-b42c-d0016b7c147c',  // ← inside extra.eas
+      },
+    },
   },
 };

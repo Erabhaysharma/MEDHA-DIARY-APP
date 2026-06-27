@@ -1,14 +1,18 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/contexts/ThemeContext';
-import { Platform } from 'react-native';
-import { View } from 'react-native';
-import { useEffect, useState } from 'react';
-import { supabase } from '../../src/lib/supabase';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { supabase } from '../../src/lib/supabase';
+import { Platform, View, Text } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function AppLayout() {
-  const { colors: C } = useTheme();
+  const { colors: C }  = useTheme();
+  const insets         = useSafeAreaInsets();  // ← reads actual system insets
+
+  // Bottom inset — handles gesture bar on Android + home indicator on iOS
+  const bottomInset = insets.bottom;
 
   return (
     <Tabs
@@ -17,15 +21,21 @@ export default function AppLayout() {
         tabBarStyle: {
           backgroundColor: C.surface,
           borderTopColor:  C.border,
-          borderTopWidth:  1,
-          height:          Platform.OS === 'android' ? 65 : 85,
-          paddingBottom:   Platform.OS === 'android' ? 10 : 28,
+          borderTopWidth:  0.5,
+          // ← Dynamic height based on actual system inset
+          height:          52 + bottomInset,
+          paddingBottom:   bottomInset > 0 ? bottomInset : 8,
           paddingTop:      8,
           elevation:       8,
+          // Ensure it sits above system nav bar
+          position:        'absolute',
+          bottom:          0,
+          left:            0,
+          right:           0,
         },
         tabBarActiveTintColor:   C.primary,
         tabBarInactiveTintColor: C.textMuted,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarLabelStyle:        { fontSize: 11, fontWeight: '600' },
       }}
     >
       <Tabs.Screen
@@ -43,19 +53,14 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
-        name="chat"
-        options={{
-          title: 'Chat',
-          tabBarIcon: ({ color, size }) => <Ionicons name="chatbubble-ellipses" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-  name="astro"
+  name="chat"
   options={{
-    title: 'Astro',
+    title: 'Chat',
     tabBarIcon: ({ color, size }) => (
-      <AstroTabIcon color={color} size={size} />
+      <Ionicons name="chatbubble-ellipses" size={size} color={color} />
     ),
+    // ← Hide tabbar completely on chat screen
+    tabBarStyle: { display: 'none' },
   }}
 />
       <Tabs.Screen
@@ -65,24 +70,28 @@ export default function AppLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="newspaper-outline" size={size} color={color} />,
         }}
       />
-
-      
-         <Tabs.Screen
-        name="account"
+      <Tabs.Screen
+        name="astro"
         options={{
-          href: null,  // ← this hides it from tab bar completely
+          title: 'Astro',
+          tabBarIcon: ({ color, size }) => (
+            <AstroTabIcon color={color} size={size} />
+          ),
         }}
       />
+     
 
-      {/* Hidden from tabbar — still routable */}
+      {/* Hidden tabs */}
       <Tabs.Screen name="people"   options={{ href: null }} />
       <Tabs.Screen name="schedule" options={{ href: null }} />
+      <Tabs.Screen name="account" options={{href: null}}/>
     </Tabs>
   );
 }
+
 function AstroTabIcon({ color, size }: { color: string; size: number }) {
-  const { user }      = useAuth();
-  const [isPremium, setIsPremium] = useState(false);
+  const { user }                    = useAuth();
+  const [isPremium, setIsPremium]   = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -105,11 +114,10 @@ function AstroTabIcon({ color, size }: { color: string; size: number }) {
           width:           12,
           height:          12,
           borderRadius:    6,
-          borderWidth:     0,
           alignItems:      'center',
           justifyContent:  'center',
         }}>
-          <Ionicons name="diamond" size={11} color="#00b3ff" />
+          <Ionicons name="diamond" size={10} color="#00a2ff" />
         </View>
       )}
     </View>

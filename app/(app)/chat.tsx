@@ -2,12 +2,12 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   FlatList, KeyboardAvoidingView, Platform, ActivityIndicator,
-  Animated, Pressable,
+  Animated, Pressable, BackHandler, StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
-import { useAuth } from '../../src/contexts/AuthContext';
+import { router, useFocusEffect } from 'expo-router';
+import { useAuth }  from '../../src/contexts/AuthContext';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import {
   createChatSession, streamChat, getChatSessions,
@@ -23,10 +23,10 @@ interface Message extends ChatMessage {
 
 const SUGGESTIONS = [
   "How have I been feeling lately?",
-  "Who has been good for me recently?",
-  "What patterns do you notice in my life?",
-  "What mistakes keep coming up for me?",
+  "Who has been most important to me?",
+  "What patterns do you notice?",
   "What should I focus on right now?",
+  "What mistakes keep coming up?",
 ];
 
 function formatSourceDate(dateStr: string): string {
@@ -38,7 +38,8 @@ function formatSourceDate(dateStr: string): string {
 function groupSessionsByDate(sessions: ChatSession[]) {
   const groups: { title: string; data: ChatSession[] }[] = [];
   const today     = new Date();
-  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
 
   const todaySessions:     ChatSession[] = [];
   const yesterdaySessions: ChatSession[] = [];
@@ -46,33 +47,88 @@ function groupSessionsByDate(sessions: ChatSession[]) {
 
   sessions.forEach(s => {
     const d = new Date(s.created_at);
-    if (d.toDateString() === today.toDateString())     todaySessions.push(s);
+    if (d.toDateString() === today.toDateString())         todaySessions.push(s);
     else if (d.toDateString() === yesterday.toDateString()) yesterdaySessions.push(s);
-    else olderSessions.push(s);
+    else                                                    olderSessions.push(s);
   });
 
   if (todaySessions.length)     groups.push({ title: 'Today',     data: todaySessions });
   if (yesterdaySessions.length) groups.push({ title: 'Yesterday', data: yesterdaySessions });
-  if (olderSessions.length)     groups.push({ title: 'Older',     data: olderSessions });
+  if (olderSessions.length)     groups.push({ title: 'Earlier',   data: olderSessions });
   return groups;
 }
 
-export default function ChatScreen() {
-  const { profile }   = useAuth();
-  const { colors: C } = useTheme();
+// ─── Typing dots animation ────────────────────────────────────────────────────
+function TypingDots({ color }: { color: string }) {
+  const dot1 = useRef(new Animated.Value(0)).current;
+  const dot2 = useRef(new Animated.Value(0)).current;
+  const dot3 = useRef(new Animated.Value(0)).current;
 
-  const [messages,      setMessages]      = useState<Message[]>([]);
-  const [input,         setInput]         = useState('');
-  const [sessionId,     setSessionId]     = useState<string | null>(null);
-  const [loading,       setLoading]       = useState(false);
-  const [initError,     setInitError]     = useState<string | null>(null);
-  const [sidebarOpen,   setSidebarOpen]   = useState(false);
-  const [sessions,      setSessions]      = useState<ChatSession[]>([]);
+  useEffect(() => {
+    const anim = (dot: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, { toValue: 1, duration: 300, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0, duration: 300, useNativeDriver: true }),
+          Animated.delay(600),
+        ])
+      );
+
+    const a1 = anim(dot1, 0);
+    const a2 = anim(dot2, 150);
+    const a3 = anim(dot3, 300);
+    a1.start(); a2.start(); a3.start();
+    return () => { a1.stop(); a2.stop(); a3.stop(); };
+  }, []);
+
+  const dotStyle = (anim: Animated.Value) => ({
+    width:  7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: color,
+    opacity: anim,
+    transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }],
+  });
+
+  return (
+    <View style={{ flexDirection: 'row', gap: 5, paddingVertical: 4, paddingHorizontal: 2 }}>
+      <Animated.View style={dotStyle(dot1)} />
+      <Animated.View style={dotStyle(dot2)} />
+      <Animated.View style={dotStyle(dot3)} />
+    </View>
+  );
+}
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
+export default function ChatScreen() {
+  const { profile }    = useAuth();
+  const { colors: C }  = useTheme();
+  const insets         = useSafeAreaInsets();
+
+  const [messages,        setMessages]        = useState<Message[]>([]);
+  const [input,           setInput]           = useState('');
+  const [sessionId,       setSessionId]       = useState<string | null>(null);
+  const [loading,         setLoading]         = useState(false);
+  const [initError,       setInitError]       = useState<string | null>(null);
+  const [sidebarOpen,     setSidebarOpen]     = useState(false);
+  const [sessions,        setSessions]        = useState<ChatSession[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
 
   const flatListRef  = useRef<FlatList>(null);
   const isStreaming  = useRef(false);
   const slideAnim    = useRef(new Animated.Value(-300)).current;
+  const overlayAnim  = useRef(new Animated.Value(0)).current;
+
+  // ── Android back → home ──
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (sidebarOpen) { setSidebarOpen(false); return true; }
+      router.replace('/(app)/home');
+      return true;
+    });
+    return () => sub.remove();
+  }, [sidebarOpen]);
 
   useFocusEffect(useCallback(() => {
     if (!sessionId) initSession();
@@ -80,17 +136,24 @@ export default function ChatScreen() {
 
   useEffect(() => {
     if (messages.length > 0) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
     }
   }, [messages]);
 
-  // Animate sidebar
+  // Sidebar animation
   useEffect(() => {
-    Animated.timing(slideAnim, {
-      toValue:         sidebarOpen ? 0 : -300,
-      duration:        250,
-      useNativeDriver: true,
-    }).start();
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: sidebarOpen ? 0 : -300,
+        duration: 280,
+        useNativeDriver: true,
+      }),
+      Animated.timing(overlayAnim, {
+        toValue: sidebarOpen ? 1 : 0,
+        duration: 280,
+        useNativeDriver: true,
+      }),
+    ]).start();
     if (sidebarOpen) loadSessions();
   }, [sidebarOpen]);
 
@@ -107,7 +170,7 @@ export default function ChatScreen() {
       const id = await createChatSession();
       setSessionId(id);
     } catch (e: any) {
-      setInitError(e.message || 'Could not connect to Medha.');
+      setInitError(e.message || 'Could not connect.');
     }
   };
 
@@ -115,17 +178,14 @@ export default function ChatScreen() {
     setMessages([]);
     setSessionId(null);
     setSidebarOpen(false);
+    setTimeout(() => initSession(), 100);
   };
 
   const loadSession = async (session: ChatSession) => {
     setSidebarOpen(false);
     setSessionId(session.session_id);
     const history = await getChatHistory(session.session_id);
-    const msgs: Message[] = history.map((m, i) => ({
-      ...m,
-      id: `${m.role}-${i}`,
-    }));
-    setMessages(msgs);
+    setMessages(history.map((m, i) => ({ ...m, id: `${m.role}-${i}` })));
   };
 
   const sendMessage = async (text?: string) => {
@@ -136,8 +196,8 @@ export default function ChatScreen() {
     isStreaming.current = true;
     setLoading(true);
 
-    const userMsg: Message = { id: `user-${Date.now()}`, role: 'user', content: messageText };
-    const assistantId = `assistant-${Date.now()}`;
+    const userMsg: Message      = { id: `user-${Date.now()}`, role: 'user', content: messageText };
+    const assistantId            = `assistant-${Date.now()}`;
     const assistantMsg: Message = { id: assistantId, role: 'assistant', content: '', loading: true };
 
     setMessages(prev => [...prev, userMsg, assistantMsg]);
@@ -163,7 +223,7 @@ export default function ChatScreen() {
       onError: () => {
         setMessages(prev => prev.map(m =>
           m.id === assistantId
-            ? { ...m, content: 'Sorry, something went wrong. Try again.', loading: false }
+            ? { ...m, content: 'Something went wrong. Please try again.', loading: false }
             : m
         ));
         isStreaming.current = false;
@@ -172,41 +232,55 @@ export default function ChatScreen() {
     });
   };
 
-  const renderMessage = ({ item }: { item: Message }) => {
+  const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     const isUser = item.role === 'user';
+
     return (
-      <View style={[styles.messageWrap, isUser && styles.messageWrapUser]}>
+      <View style={[
+        s.msgRow,
+        isUser ? s.msgRowUser : s.msgRowBot,
+        index === 0 && { marginTop: SPACING.lg },
+      ]}>
+        {/* Bot avatar */}
         {!isUser && (
-          <View style={[styles.avatar, { backgroundColor: C.primaryFaint, borderColor: C.primary }]}>
-            <Text style={[styles.avatarText, { color: C.primary }]}>
+          <View style={[s.botAvatar, { backgroundColor: C.primaryFaint }]}>
+            <Text style={[s.botAvatarText, { color: C.primary }]}>
               {profile?.ai_name?.[0] ?? 'M'}
             </Text>
           </View>
         )}
-        <View style={[
-          styles.bubble,
-          isUser
-            ? { backgroundColor: C.primary, borderBottomRightRadius: 4 }
-            : { backgroundColor: C.surface, borderColor: C.border, borderWidth: 1, borderBottomLeftRadius: 4 },
-        ]}>
-          {item.loading && item.content === '' ? (
-            <View style={styles.typingWrap}>
-              <ActivityIndicator size="small" color={C.primary} />
-              <Text style={[styles.typingText, { color: C.textMuted }]}>thinking...</Text>
-            </View>
-          ) : (
-            <Text style={[styles.bubbleText, { color: isUser ? C.background : C.textPrimary }]}>
-              {item.content}
-            </Text>
-          )}
+
+        <View style={[s.msgContent, isUser && s.msgContentUser]}>
+          {/* Bubble */}
+          <View style={[
+            s.bubble,
+            isUser
+              ? [s.bubbleUser, { backgroundColor: C.primary }]
+              : [s.bubbleBot],
+          ]}>
+            {item.loading && item.content === '' ? (
+              <TypingDots color={C.primary} />
+            ) : (
+              <Text style={[
+                s.bubbleText,
+                { color: isUser ? '#fff' : C.textPrimary },
+              ]}>
+                {item.content}
+              </Text>
+            )}
+          </View>
+
+          {/* Source chips */}
           {item.sources && item.sources.length > 0 && (
-            <View style={[styles.sourcesWrap, { borderTopColor: C.border }]}>
-              <Text style={[styles.sourcesLabel, { color: C.textMuted }]}>from your diary:</Text>
-              <View style={styles.sourceChips}>
-                {item.sources.map((date, idx) => (
-                  <View key={idx} style={[styles.sourceChip, { backgroundColor: C.primaryFaint, borderColor: C.primary + '30' }]}>
+            <View style={s.sources}>
+              <Text style={[s.sourcesLabel, { color: C.textMuted }]}>
+                From your diary
+              </Text>
+              <View style={s.sourceChips}>
+                {item.sources.map((date, i) => (
+                  <View key={i} style={[s.chip, { backgroundColor: C.primaryFaint }]}>
                     <Ionicons name="book-outline" size={10} color={C.primary} />
-                    <Text style={[styles.sourceChipText, { color: C.primary }]}>
+                    <Text style={[s.chipText, { color: C.primary }]}>
                       {formatSourceDate(date)}
                     </Text>
                   </View>
@@ -220,80 +294,86 @@ export default function ChatScreen() {
   };
 
   const grouped = groupSessionsByDate(sessions);
+  const aiName  = profile?.ai_name ?? 'Medha';
+return (
+  <View style={[s.root, { backgroundColor: C.background }]}>
+    <StatusBar barStyle={C.background === '#fff' ? 'dark-content' : 'light-content'} />
 
-  return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: C.background }]} edges={['top']}>
+    {/* Top safe area only */}
+    <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView
-        style={[styles.kav, { backgroundColor: C.background }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 70}
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         {/* ── Header ── */}
-        <View style={[styles.header, { borderBottomColor: C.border, backgroundColor: C.background }]}>
-          {/* Sidebar toggle */}
+        <View style={[s.header, { borderColor: C.border }]}>
           <TouchableOpacity
-            style={[styles.iconBtn, { backgroundColor: C.surface, borderColor: C.border }]}
-            onPress={() => setSidebarOpen(true)}
+            onPress={() => router.replace('/(app)/home')}
+            style={s.headerBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="menu" size={20} color={C.primary} />
+            <Ionicons name="arrow-back" size={22} color={C.textPrimary} />
           </TouchableOpacity>
 
-          <View style={styles.headerCenter}>
-            <View style={[styles.headerAvatar, { backgroundColor: C.primaryFaint, borderColor: C.primary }]}>
-              <Text style={[styles.headerAvatarText, { color: C.primary }]}>
-                {profile?.ai_name?.[0] ?? 'M'}
+          <TouchableOpacity
+            style={s.headerCenter}
+            onPress={() => setSidebarOpen(true)}
+            activeOpacity={0.7}
+          >
+            <View style={[s.headerAvatar, { backgroundColor: C.primaryFaint }]}>
+              <Text style={[s.headerAvatarText, { color: C.primary }]}>
+                {aiName[0]}
               </Text>
             </View>
             <View>
-              <Text style={[styles.headerName, { color: C.textPrimary }]}>
-                {profile?.ai_name ?? 'Medha'}
-              </Text>
-              <Text style={[styles.headerSub, { color: C.textMuted }]}>your personal companion</Text>
+              <Text style={[s.headerName, { color: C.textPrimary }]}>{aiName}</Text>
+              <Text style={[s.headerSub,  { color: C.textMuted   }]}>your diary companion</Text>
             </View>
-          </View>
+            <Ionicons name="chevron-down" size={14} color={C.textMuted} style={{ marginLeft: 2 }} />
+          </TouchableOpacity>
 
-          {/* New chat */}
           <TouchableOpacity
-            style={[styles.iconBtn, { backgroundColor: C.surface, borderColor: C.border }]}
             onPress={startNewChat}
+            style={s.headerBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="add" size={20} color={C.primary} />
+            <Ionicons name="create-outline" size={22} color={C.textPrimary} />
           </TouchableOpacity>
         </View>
 
         {/* ── Error banner ── */}
         {initError && (
-          <View style={[styles.errorBanner, { backgroundColor: C.error + '20' }]}>
-            <Text style={[styles.errorText, { color: C.error }]}>{initError}</Text>
-            <TouchableOpacity onPress={() => { setInitError(null); setSessionId(null); initSession(); }}>
-              <Text style={[styles.errorRetry, { color: C.primary }]}>Retry</Text>
+          <View style={[s.errorBanner, { backgroundColor: C.error + '15' }]}>
+            <Ionicons name="alert-circle-outline" size={14} color={C.error} />
+            <Text style={[s.errorText, { color: C.error }]}>{initError}</Text>
+            <TouchableOpacity onPress={() => { setInitError(null); initSession(); }}>
+              <Text style={[s.errorRetry, { color: C.primary }]}>Retry</Text>
             </TouchableOpacity>
           </View>
         )}
 
         {/* ── Messages / Empty state ── */}
         {messages.length === 0 ? (
-          <View style={styles.emptyWrap}>
-            <View style={[styles.welcomeAvatar, { backgroundColor: C.primaryFaint, borderColor: C.primary }]}>
-              <Text style={[styles.welcomeAvatarText, { color: C.primary }]}>
-                {profile?.ai_name?.[0] ?? 'M'}
-              </Text>
+          <View style={s.empty}>
+            <View style={[s.emptyAvatar, { backgroundColor: C.primaryFaint }]}>
+              <Text style={[s.emptyAvatarText, { color: C.primary }]}>{aiName[0]}</Text>
             </View>
-            <Text style={[styles.welcomeTitle, { color: C.textPrimary }]}>
-              Hi {profile?.display_name?.split(' ')[0] ?? 'there'}
+            <Text style={[s.emptyGreeting, { color: C.textPrimary }]}>
+              Hi {profile?.display_name?.split(' ')[0] ?? 'there'} 👋
             </Text>
-            <Text style={[styles.welcomeSub, { color: C.textMuted }]}>
-              I know you. Ask me anything about your life.
+            <Text style={[s.emptySub, { color: C.textMuted }]}>
+              I know your story. Ask me anything.
             </Text>
-            <View style={styles.suggestionsWrap}>
-              {SUGGESTIONS.map((suggestion, idx) => (
+            <View style={s.suggestions}>
+              {SUGGESTIONS.map((q, i) => (
                 <TouchableOpacity
-                  key={idx}
-                  style={[styles.suggestionChip, { backgroundColor: C.surface, borderColor: C.border }]}
-                  onPress={() => sendMessage(suggestion)}
-                  activeOpacity={0.8}
+                  key={i}
+                  onPress={() => sendMessage(q)}
+                  activeOpacity={0.5}
+                  style={[s.suggestion, { borderColor: C.border + '40' }]}
                 >
-                  <Text style={[styles.suggestionText, { color: C.textSecondary }]}>{suggestion}</Text>
+                  <Text style={[s.suggestionText, { color: C.textSecondary }]}>{q}</Text>
+                  <Ionicons name="arrow-forward" size={13} color={C.textMuted} />
                 </TouchableOpacity>
               ))}
             </View>
@@ -304,242 +384,342 @@ export default function ChatScreen() {
             data={messages}
             keyExtractor={item => item.id}
             renderItem={renderMessage}
-            contentContainerStyle={styles.messageList}
+            contentContainerStyle={s.msgList}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
           />
         )}
 
-        {/* ── Input bar ── */}
-        <View style={[styles.inputWrap, { borderTopColor: C.border, backgroundColor: C.background }]}>
-          <TextInput
-            style={[styles.input, { backgroundColor: C.surface, borderColor: C.border, color: C.textPrimary }]}
-            placeholder={`Ask ${profile?.ai_name ?? 'Medha'} anything...`}
-            placeholderTextColor={C.textMuted}
-            value={input}
-            onChangeText={setInput}
-            multiline
-            maxLength={500}
-            returnKeyType="send"
-            onSubmitEditing={() => sendMessage()}
-          />
-          <TouchableOpacity
-            style={[
-              styles.sendBtn, { backgroundColor: C.primary },
-              (!input.trim() || loading || !sessionId) && styles.sendBtnDisabled,
-            ]}
-            onPress={() => sendMessage()}
-            disabled={!input.trim() || loading || !sessionId}
-            activeOpacity={0.8}
-          >
-            {loading
-              ? <ActivityIndicator size="small" color={C.background} />
-              : <Ionicons name="arrow-up" size={18} color={C.background} />
-            }
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-
-      {/* ── Sidebar overlay ── */}
-      {sidebarOpen && (
-        <Pressable
-          style={styles.overlay}
-          onPress={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* ── Sidebar panel ── */}
-      <Animated.View
-        style={[
-          styles.sidebar,
-          { backgroundColor: C.background, borderRightColor: C.border },
-          { transform: [{ translateX: slideAnim }] },
-        ]}
-      >
-        <SafeAreaView edges={['top']} style={{ flex: 1 }}>
-          {/* Sidebar header */}
-          <View style={[styles.sidebarHeader, { borderBottomColor: C.border }]}>
-            <Text style={[styles.sidebarTitle, { color: C.textPrimary }]}>Chats</Text>
+        {/* ── Input bar — bottom safe area handled manually ── */}
+        <View style={[
+          s.inputBar,
+          {
+            borderColor:     C.border,
+            backgroundColor: C.background,
+            paddingBottom:   insets.bottom > 0 ? insets.bottom : SPACING.md,
+          }
+        ]}>
+          <View style={[s.inputWrap, { backgroundColor: C.surface, borderColor: C.border }]}>
+            <TextInput
+              style={[s.input, { color: C.textPrimary }]}
+              placeholder={`Message ${aiName}...`}
+              placeholderTextColor={C.textMuted}
+              value={input}
+              onChangeText={setInput}
+              multiline
+              maxLength={500}
+            />
             <TouchableOpacity
-              style={[styles.newChatSideBtn, { backgroundColor: C.primary }]}
-              onPress={startNewChat}
+              style={[
+                s.sendBtn,
+                { backgroundColor: input.trim() ? C.primary : C.border },
+              ]}
+              onPress={() => sendMessage()}
+              disabled={!input.trim() || loading || !sessionId}
+              activeOpacity={0.8}
             >
-              <Ionicons name="add" size={16} color={C.background} />
-              <Text style={[styles.newChatSideBtnText, { color: C.background }]}>New chat</Text>
+              {loading
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Ionicons name="arrow-up" size={16} color="#fff" />
+              }
             </TouchableOpacity>
           </View>
+        </View>
 
-          {/* Sessions list */}
-          {loadingSessions ? (
-            <ActivityIndicator style={{ marginTop: SPACING.lg }} color={C.primary} />
-          ) : sessions.length === 0 ? (
-            <View style={styles.sidebarEmpty}>
-              <Ionicons name="chatbubbles-outline" size={32} color={C.textMuted} />
-              <Text style={[styles.sidebarEmptyText, { color: C.textMuted }]}>
-                No previous chats
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={grouped}
-              keyExtractor={g => g.title}
-              renderItem={({ item: group }) => (
-                <View>
-                  <Text style={[styles.groupTitle, { color: C.textMuted }]}>
-                    {group.title}
-                  </Text>
-                  {group.data.map(session => (
-                    <TouchableOpacity
-                      key={session.session_id}
-                      style={[
-                        styles.sessionItem,
-                        { borderBottomColor: C.border },
-                        session.session_id === sessionId && { backgroundColor: C.primaryFaint },
-                      ]}
-                      onPress={() => loadSession(session)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="chatbubble-outline" size={14} color={C.textMuted} />
-                      <Text
-                        style={[styles.sessionTitle, { color: C.textPrimary }]}
-                        numberOfLines={1}
-                      >
-                        {session.title || session.last_message || 'Chat'}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-              showsVerticalScrollIndicator={false}
-            />
-          )}
-        </SafeAreaView>
-      </Animated.View>
-
+      </KeyboardAvoidingView>
     </SafeAreaView>
-  );
+
+    {/* ── Sidebar overlay ── */}
+    {sidebarOpen && (
+      <Pressable
+        style={[s.overlay]}
+        onPress={() => setSidebarOpen(false)}
+      />
+    )}
+
+    {/* ── Sidebar panel ── */}
+    <Animated.View style={[
+      s.sidebar,
+      { backgroundColor: C.background, borderRightColor: C.border },
+      { transform: [{ translateX: slideAnim }] },
+    ]}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <View style={[s.sidebarHeader, { borderColor: C.border }]}>
+          <Text style={[s.sidebarTitle, { color: C.textPrimary }]}>History</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity
+              onPress={startNewChat}
+              style={[s.newChatBtn, { backgroundColor: C.primary }]}
+            >
+              <Ionicons name="add" size={16} color="#fff" />
+              <Text style={s.newChatBtnText}>New chat</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setSidebarOpen(false)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={[s.closeBtn, { backgroundColor: C.surface, borderColor: C.border }]}
+            >
+              <Ionicons name="close" size={18} color={C.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {loadingSessions ? (
+          <ActivityIndicator style={{ marginTop: SPACING.xl }} color={C.primary} />
+        ) : sessions.length === 0 ? (
+          <View style={s.sidebarEmpty}>
+            <Ionicons name="chatbubbles-outline" size={36} color={C.textMuted} />
+            <Text style={[s.sidebarEmptyText, { color: C.textMuted }]}>No chats yet</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={grouped}
+            keyExtractor={g => g.title}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item: group }) => (
+              <View>
+                <Text style={[s.groupLabel, { color: C.textMuted }]}>{group.title}</Text>
+                {group.data.map(session => (
+                  <TouchableOpacity
+                    key={session.session_id}
+                    style={[
+                      s.sessionItem,
+                      { borderColor: C.border },
+                      session.session_id === sessionId && { backgroundColor: C.primaryFaint },
+                    ]}
+                    onPress={() => loadSession(session)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="chatbubble-outline"
+                      size={14}
+                      color={session.session_id === sessionId ? C.primary : C.textMuted}
+                    />
+                    <Text
+                      style={[
+                        s.sessionTitle,
+                        { color: session.session_id === sessionId ? C.primary : C.textPrimary },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {session.title || session.last_message || 'Chat'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          />
+        )}
+      </SafeAreaView>
+    </Animated.View>
+
+  </View>
+);
 }
 
-const SIDEBAR_WIDTH = 280;
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const SIDEBAR_W = 280;
 
-const styles = StyleSheet.create({
-  safe:  { flex: 1 },
-  kav:   { flex: 1 },
+const s = StyleSheet.create({
+  root: { flex: 1 },
 
+  // Header
   header: {
     flexDirection:     'row',
     alignItems:        'center',
     justifyContent:    'space-between',
     paddingHorizontal: SPACING.md,
-    paddingVertical:   SPACING.sm,
-    borderBottomWidth: 1,
+    paddingVertical:   10,
+    borderBottomWidth: 0.5,
   },
-  headerCenter: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  headerAvatar: {
-    width: 36, height: 36, borderRadius: BORDER_RADIUS.full,
-    alignItems: 'center', justifyContent: 'center', borderWidth: 1,
-  },
+  headerBtn:        { padding: 4, width: 36, alignItems: 'center' },
+  headerCenter:     { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  headerAvatar:     { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   headerAvatarText: { fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
-  headerName:       { fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.semibold },
-  headerSub:        { fontSize: FONT_SIZE.xs },
-  iconBtn: {
-    padding: 8, borderRadius: BORDER_RADIUS.full, borderWidth: 1,
-  },
+  headerName:       { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, textAlign: 'center' },
+  headerSub:        { fontSize: 10, textAlign: 'center' },
 
+  // Error
   errorBanner: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, gap: SPACING.sm,
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               6,
+    paddingHorizontal: SPACING.md,
+    paddingVertical:   8,
   },
-  errorText:  { fontSize: FONT_SIZE.xs, flex: 1 },
+  errorText:  { flex: 1, fontSize: FONT_SIZE.xs },
   errorRetry: { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold },
 
-  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.lg },
-  welcomeAvatar: {
-    width: 64, height: 64, borderRadius: BORDER_RADIUS.full,
+  // Empty state
+  empty: {
+    flex:           1,
+    alignItems:     'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.xl,
+  },
+  emptyAvatar: {
+    width: 60, height: 60, borderRadius: 30,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, marginBottom: SPACING.md,
+    marginBottom: SPACING.md,
   },
-  welcomeAvatarText: { fontSize: FONT_SIZE.xxl, fontWeight: FONT_WEIGHT.bold },
-  welcomeTitle:      { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, marginBottom: SPACING.xs },
-  welcomeSub:        { fontSize: FONT_SIZE.sm, marginBottom: SPACING.lg, textAlign: 'center' },
-  suggestionsWrap:   { width: '100%', gap: SPACING.sm },
-  suggestionChip:    { borderRadius: BORDER_RADIUS.md, padding: SPACING.sm, borderWidth: 1 },
-  suggestionText:    { fontSize: FONT_SIZE.sm },
+  emptyAvatarText: { fontSize: 26, fontWeight: FONT_WEIGHT.bold },
+  emptyGreeting:   { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, marginBottom: 6 },
+  emptySub:        { fontSize: FONT_SIZE.sm, marginBottom: SPACING.xl, textAlign: 'center', lineHeight: 20 },
 
-  messageList:     { padding: SPACING.md, paddingBottom: SPACING.xl },
-  messageWrap:     { flexDirection: 'row', alignItems: 'flex-end', marginBottom: SPACING.md, gap: SPACING.sm },
-  messageWrapUser: { flexDirection: 'row-reverse' },
-  avatar: {
-    width: 28, height: 28, borderRadius: BORDER_RADIUS.full,
-    alignItems: 'center', justifyContent: 'center', borderWidth: 1, flexShrink: 0,
-  },
-  avatarText:  { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold },
-  bubble:      { maxWidth: '80%', borderRadius: BORDER_RADIUS.lg, padding: SPACING.sm },
-  bubbleText:  { fontSize: FONT_SIZE.md, lineHeight: 22 },
-  typingWrap:  { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, padding: SPACING.xs },
-  typingText:  { fontSize: FONT_SIZE.sm },
-  sourcesWrap: { marginTop: SPACING.sm, paddingTop: SPACING.sm, borderTopWidth: 1 },
-  sourcesLabel:{ fontSize: FONT_SIZE.xs, marginBottom: 4 },
-  sourceChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  sourceChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    borderRadius: BORDER_RADIUS.full, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1,
-  },
-  sourceChipText: { fontSize: 10, fontWeight: FONT_WEIGHT.medium },
-
-  inputWrap: {
-    flexDirection: 'row', alignItems: 'flex-end',
-    gap: SPACING.sm, padding: SPACING.md, borderTopWidth: 1,
-    paddingBottom: Platform.OS === 'android' ? SPACING.lg : SPACING.md,
-  },
-  input: {
-    flex: 1, borderRadius: BORDER_RADIUS.lg, borderWidth: 1,
-    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
-    fontSize: FONT_SIZE.md, maxHeight: 120,
-  },
-  sendBtn:         { width: 40, height: 40, borderRadius: BORDER_RADIUS.full, alignItems: 'center', justifyContent: 'center' },
-  sendBtnDisabled: { opacity: 0.4 },
-
-  // Sidebar
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    zIndex: 10,
-  },
-  sidebar: {
-    position:    'absolute',
-    top:         0,
-    left:        0,
-    bottom:      0,
-    width:       SIDEBAR_WIDTH,
-    zIndex:      20,
-    borderRightWidth: 1,
-  },
-  sidebarHeader: {
+  // Suggestions — clean, no card background
+  suggestions: { width: '100%', gap: 2 },
+  suggestion:  {
     flexDirection:  'row',
     alignItems:     'center',
     justifyContent: 'space-between',
-    padding:        SPACING.md,
-    borderBottomWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderBottomWidth: 0.5,
+    borderColor:    'rgba(150,150,150,0.15)',
   },
-  sidebarTitle: { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold },
-  newChatSideBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: BORDER_RADIUS.md,
+  suggestionText: { fontSize: FONT_SIZE.sm, flex: 1, lineHeight: 20 },
+
+  // Messages
+  msgList: {   paddingHorizontal: SPACING.md,
+  paddingTop:        SPACING.md,
+  paddingBottom:     SPACING.md,},
+
+  msgRow:     { flexDirection: 'row', marginBottom: 20, gap: 10 },
+  msgRowUser: { flexDirection: 'row-reverse' },
+  msgRowBot:  { alignItems: 'flex-start' },
+
+  botAvatar: {
+    width: 28, height: 28, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0, marginTop: 2,
   },
-  newChatSideBtnText: { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
-  sidebarEmpty:    { flex: 1, alignItems: 'center', justifyContent: 'center', gap: SPACING.sm },
-  sidebarEmptyText:{ fontSize: FONT_SIZE.sm },
-  groupTitle: {
-    fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold,
-    letterSpacing: 0.6, paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.md, paddingBottom: SPACING.xs,
+  botAvatarText: { fontSize: 12, fontWeight: FONT_WEIGHT.bold },
+
+  msgContent:     { flex: 1, alignItems: 'flex-start' },
+  msgContentUser: { alignItems: 'flex-end' },
+
+  bubble: { maxWidth: '88%', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
+  bubbleUser: { borderBottomRightRadius: 4 },
+  bubbleBot:  { borderBottomLeftRadius:  4 },
+  bubbleText: { fontSize: FONT_SIZE.md, lineHeight: 24 },
+
+  // Sources
+  sources:      { marginTop: 6, paddingLeft: 4 },
+  sourcesLabel: { fontSize: 11, marginBottom: 5 },
+  sourceChips:  { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  chip: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               3,
+    borderRadius:      BORDER_RADIUS.full,
+    paddingHorizontal: 8,
+    paddingVertical:   3,
   },
-  sessionItem: {
-    flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
-    paddingHorizontal: SPACING.md, paddingVertical: 12,
+  chipText: { fontSize: 10, fontWeight: FONT_WEIGHT.medium },
+
+  inputWrap: {
+    flexDirection:     'row',
+    alignItems:        'flex-end',
+    borderRadius:      24,
+    borderWidth:       1,
+    paddingLeft:       16,
+    paddingRight:      6,
+    paddingVertical:   6,
+    gap:               6,
+  },
+  input: {
+    flex:      1,
+    fontSize:  FONT_SIZE.md,
+    maxHeight: 120,
+    paddingTop: Platform.OS === 'ios' ? 4 : 0,
+    paddingBottom: 4,
+  },
+  sendBtn: {
+    width:          32,
+    height:         32,
+    borderRadius:   16,
+    alignItems:     'center',
+    justifyContent: 'center',
+    flexShrink:     0,
+    marginBottom:   1,
+  },
+
+  // Sidebar overlay
+ overlay: {
+  ...StyleSheet.absoluteFillObject,
+  backgroundColor: 'rgba(0,0,0,0.45)',
+  zIndex: 15,   // ← between main content (0) and sidebar (20)
+},
+
+  // Sidebar
+  sidebar: {
+    position:         'absolute',
+    top:              0,
+    left:             0,
+    bottom:           0,
+    width:            SIDEBAR_W,
+    zIndex:           20,
+    borderRightWidth: 0.5,
+  },
+  sidebarHeader: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    justifyContent:    'space-between',
+    paddingHorizontal: SPACING.md,
+    paddingVertical:   SPACING.sm,
     borderBottomWidth: 0.5,
   },
-  sessionTitle: { fontSize: FONT_SIZE.sm, flex: 1 },
+  sidebarTitle: { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold },
+  newChatBtn: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               4,
+    borderRadius:      BORDER_RADIUS.full,
+    paddingHorizontal: 12,
+    paddingVertical:   6,
+  },
+  newChatBtnText: { color: '#fff', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
+
+  sidebarEmpty: {
+    flex:           1,
+    alignItems:     'center',
+    justifyContent: 'center',
+    gap:            SPACING.sm,
+  },
+  sidebarEmptyText: { fontSize: FONT_SIZE.sm },
+
+  groupLabel: {
+    fontSize:          FONT_SIZE.xs,
+    fontWeight:        FONT_WEIGHT.semibold,
+    letterSpacing:     0.5,
+    paddingHorizontal: SPACING.md,
+    paddingTop:        SPACING.md,
+    paddingBottom:     SPACING.xs,
+    textTransform:     'uppercase',
+  },
+  sessionItem: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical:   12,
+    borderBottomWidth: 0.5,
+  },
+  sessionTitle: { flex: 1, fontSize: FONT_SIZE.sm },
+  closeBtn: {
+  width:          32,
+  height:         32,
+  borderRadius:   16,
+  borderWidth:    1,
+  alignItems:     'center',
+  justifyContent: 'center',
+},
+inputBar: {
+  paddingHorizontal: SPACING.md,
+  paddingTop:        10,
+  borderTopWidth:    0.5,
+  // paddingBottom handled inline with insets
+},
+
 });
